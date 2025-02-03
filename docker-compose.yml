@@ -1,0 +1,149 @@
+services:
+  db:
+    image: postgres:latest
+    container_name: postgresql_db1
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=qasdwsxaf
+      - POSTGRES_PASSWORD=qasdwsxaf
+    volumes:
+      - type: volume
+        source: db-volume
+        target: "/var/lib/pgsql/data"
+        read_only: false
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+  zookeeper:
+    container_name: zookeeper1
+    image: bitnami/zookeeper:latest
+    tmpfs: "/zktmp"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: 'yes'
+    ports:
+      - "2181:2181"
+
+  kafka11:
+    container_name: kafka11
+    image: bitnami/kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_LISTENERS: INTERNAL://:9092,EXTERNAL://0.0.0.0:29092
+      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka11:9092,EXTERNAL://localhost:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      ALLOW_PLAINTEXT_LISTENER: 'yes'
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    volumes:
+      - kafka_data11:/bitnami/kafka
+
+  kafka22:
+    container_name: kafka22
+    image: bitnami/kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_LISTENERS: INTERNAL://:9093,EXTERNAL://0.0.0.0:29093
+      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka22:9093,EXTERNAL://localhost:29093
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      ALLOW_PLAINTEXT_LISTENER: 'yes'
+    ports:
+      - "9093:9093"
+      - "29093:29093"
+    volumes:
+      - kafka_data22:/bitnami/kafka
+
+  kafka33:
+    container_name: kafka33
+    image: bitnami/kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_LISTENERS: INTERNAL://:9094,EXTERNAL://0.0.0.0:29094
+      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka33:9094,EXTERNAL://localhost:29094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      ALLOW_PLAINTEXT_LISTENER: 'yes'
+    ports:
+      - "9094:9094"
+      - "29094:29094"
+    volumes:
+      - kafka_data33:/bitnami/kafka
+
+  kafka-ui:
+    container_name: kafka-ui1
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      - kafka11
+      - kafka22
+      - kafka33
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka11:9092,kafka22:9093,kafka33:9094
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  debezium:
+    image: debezium/connect:3.0.0.Final
+    container_name: debezium
+    environment:
+      - BOOTSTRAP_SERVERS=kafka11:9092,kafka22:9093,kafka33:9094
+      - GROUP_ID=debezium-group
+      - CONFIG_STORAGE_TOPIC=dbz-configs
+      - OFFSET_STORAGE_TOPIC=dbz-offsets
+      - STATUS_STORAGE_TOPIC=dbz-status
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka11
+      - kafka22
+      - kafka33
+    networks:
+      - kafka-net
+
+volumes:
+  es_data:
+    driver: local
+  db-volume:
+    name: postgresql_volume1
+  kafka_data11:
+    driver: local
+  kafka_data22:
+    driver: local
+  kafka_data33:
+    driver: local
+
+networks:
+  kafka-net:
+    driver: bridge
