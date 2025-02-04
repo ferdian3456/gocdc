@@ -7,8 +7,8 @@ services:
     environment:
       - POSTGRES_USER=qasdwsxaf
       - POSTGRES_PASSWORD=qasdwsxaf
-      - POSTGRES_DB=gocdc
-    command: [ "postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10" ]
+    #  - POSTGRES_DB=gocdc
+    # command: [ "postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10" ]
     volumes:
       - type: volume
         source: db-volume
@@ -128,23 +128,23 @@ services:
     networks:
       - kafka-net
 
-  debezium:
-    image: debezium/connect:3.0.0.Final
-    container_name: debezium
-    environment:
-      - BOOTSTRAP_SERVERS=kafka11:9092,kafka22:9093,kafka33:9094
-      - GROUP_ID=debezium-group
-      - CONFIG_STORAGE_TOPIC=dbz-configs
-      - OFFSET_STORAGE_TOPIC=dbz-offsets
-      - STATUS_STORAGE_TOPIC=dbz-status
-    ports:
-      - "8083:8083"
-    depends_on:
-      - kafka11
-      - kafka22
-      - kafka33
-    networks:
-      - kafka-net
+  #debezium:
+    #image: debezium/connect:3.0.0.Final
+    #container_name: debezium
+    #environment:
+    #  - BOOTSTRAP_SERVERS=kafka11:9092,kafka22:9093,kafka33:9094
+    #  - GROUP_ID=debezium-group
+    #  - CONFIG_STORAGE_TOPIC=dbz-configs
+    #  - OFFSET_STORAGE_TOPIC=dbz-offsets
+    #  - STATUS_STORAGE_TOPIC=dbz-status
+    #ports:
+    #  - "8083:8083"
+    #depends_on:
+    #  - kafka11
+    #  - kafka22
+    #  - kafka33
+    #networks:
+    #  - kafka-net
 
 volumes:
   es_data:
