@@ -133,6 +133,31 @@ func (repository *UserRepository) FindUserInfo(ctx context.Context, userUUID str
 	}
 }
 
+func (repository *UserRepository) FindUserInfoWithTx(ctx context.Context, tx *sql.Tx, userUUID string) (user.UserResponse, error) {
+	query := "SELECT name,address FROM users WHERE id=$1"
+	row, err := tx.QueryContext(ctx, query, userUUID)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer row.Close()
+
+	user := user.UserResponse{}
+
+	if row.Next() {
+		err = row.Scan(&user.Name, &user.Address)
+		if err != nil {
+			respErr := errors.New("failed to scan query result")
+			repository.Log.Panic().Err(err).Msg(respErr.Error())
+		}
+
+		return user, nil
+	} else {
+		return user, errors.New("user not found")
+	}
+}
+
 func (repository *UserRepository) CheckUserExistence(ctx context.Context, userUUID string) error {
 	query := "SELECT name FROM users WHERE id=$1"
 	row, err := repository.DB.QueryContext(ctx, query, userUUID)

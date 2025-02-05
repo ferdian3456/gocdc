@@ -148,3 +148,49 @@ func (usecase *ProductUsecase) FindAllProduct(ctx context.Context) ([]product.Pr
 
 	return productResponse, nil
 }
+
+func (usecase *ProductUsecase) FindProductHomePage(ctx context.Context) ([]product.ProductHomePageResponse, error) {
+	tx, err := usecase.DB.Begin()
+	if err != nil {
+		respErr := errors.New("failed to start transaction")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer helper.CommitOrRollback(tx)
+
+	productResponse, err := usecase.ProductRepository.FindAllProductWithTx(ctx, tx)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return []product.ProductHomePageResponse{}, err
+	}
+
+	productHomePageResponses := []product.ProductHomePageResponse{}
+
+	for _, productArray := range productResponse {
+		userResponse, err := usecase.UserRepository.FindUserInfoWithTx(ctx, tx, productArray.Seller_id)
+		if err != nil {
+			usecase.Log.Warn().Msg(err.Error())
+			return []product.ProductHomePageResponse{}, err
+		}
+
+		productHomePageResponse := product.ProductHomePageResponse{
+			Id:             productArray.Id,
+			Seller_id:      productArray.Seller_id,
+			Seller_name:    userResponse.Name,
+			Seller_address: userResponse.Address,
+			Name:           productArray.Name,
+			Quantity:       productArray.Quantity,
+			Price:          productArray.Price,
+			Weight:         productArray.Weight,
+			Size:           productArray.Size,
+			Status:         productArray.Status,
+			Description:    productArray.Description,
+			Created_at:     productArray.Created_at,
+			Updated_at:     productArray.Updated_at,
+		}
+
+		productHomePageResponses = append(productHomePageResponses, productHomePageResponse)
+	}
+
+	return productHomePageResponses, nil
+}

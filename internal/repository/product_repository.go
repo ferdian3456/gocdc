@@ -182,3 +182,37 @@ func (repository *ProductRepository) FindAllProduct(ctx context.Context) ([]prod
 
 	return products, nil
 }
+
+func (repository *ProductRepository) FindAllProductWithTx(ctx context.Context, tx *sql.Tx) ([]product.ProductResponse, error) {
+	query := "SELECT id,seller_id,name,quantity,price,weight,size,status,description,created_at,updated_at FROM products"
+	row, err := repository.DB.QueryContext(ctx, query)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	hasData := false
+
+	defer row.Close()
+
+	products := []product.ProductResponse{}
+
+	for row.Next() {
+		product := product.ProductResponse{}
+		err = row.Scan(&product.Id, &product.Seller_id, &product.Name, &product.Quantity, &product.Price, &product.Weight, &product.Size, &product.Status, &product.Description, &product.Created_at, &product.Updated_at)
+		if err != nil {
+			respErr := errors.New("failed to scan query result")
+			repository.Log.Panic().Err(err).Msg(respErr.Error())
+		}
+
+		products = append(products, product)
+
+		hasData = true
+	}
+
+	if hasData == false {
+		return products, errors.New("product not found")
+	}
+
+	return products, nil
+}
