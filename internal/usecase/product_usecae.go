@@ -138,3 +138,13 @@ func (usecase *ProductUsecase) FindProductInfo(ctx context.Context, productID in
 
 	return productResponse, nil
 }
+
+func (usecase *ProductUsecase) FindAllProduct(ctx context.Context) ([]product.ProductResponse, error) {
+	productResponse, err := usecase.ProductRepository.FindAllProduct(ctx)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return productResponse, err
+	}
+
+	return productResponse, nil
+}

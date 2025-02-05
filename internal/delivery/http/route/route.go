@@ -20,6 +20,7 @@ func (c *RouteConfig) SetupRoute() {
 	c.Router.PATCH("/user", c.AuthMiddleware.ServeHTTP(c.UserController.Update))
 	c.Router.DELETE("/user", c.AuthMiddleware.ServeHTTP(c.UserController.Delete))
 
+	c.Router.GET("/product", c.ProductController.FindAllProduct)
 	c.Router.GET("/product/:productID", c.ProductController.FindProductInfo)
 	c.Router.POST("/product", c.AuthMiddleware.ServeHTTP(c.ProductController.Create))
 	c.Router.PATCH("/product/:productID", c.AuthMiddleware.ServeHTTP(c.ProductController.Update))

@@ -168,5 +168,30 @@ func (controller ProductController) FindProductInfo(writer http.ResponseWriter, 
 	}
 
 	helper.WriteToResponseBody(writer, webResponse)
+}
+
+func (controller ProductController) FindAllProduct(writer http.ResponseWriter, request *http.Request, params httprouter.Params) {
+	productResponse, err := controller.ProductUsecase.FindAllProduct(request.Context())
+	if err != nil {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusNotFound)
+
+		webResponse := web.WebResponse{
+			Code:   http.StatusNotFound,
+			Status: "Not Found",
+			Data:   err.Error(),
+		}
+
+		helper.WriteToResponseBody(writer, webResponse)
+		return
+	}
+
+	webResponse := web.WebResponse{
+		Code:   200,
+		Status: "OK",
+		Data:   productResponse,
+	}
+
+	helper.WriteToResponseBody(writer, webResponse)
 
 }
