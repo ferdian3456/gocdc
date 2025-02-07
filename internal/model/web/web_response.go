@@ -7,5 +7,6 @@ type WebResponse struct {
 }
 
 type TokenResponse struct {
-	Token string `json:"token"`
+	Access_Token  string `json:"access_token"`
+	Refresh_Token string `json:"refresh_token"`
 }

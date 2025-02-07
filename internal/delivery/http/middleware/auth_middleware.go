@@ -68,7 +68,7 @@ func (middleware *AuthMiddleware) ServeHTTP(next httprouter.Handle) httprouter.H
 			return
 		}
 
-		secretKey := middleware.Config.String("SECRET_KEY")
+		secretKey := middleware.Config.String("SECRET_KEY_ACCESS_TOKEN")
 		secretKeyByte := []byte(secretKey)
 
 		token, err := jwt.Parse(splitToken[1], func(token *jwt.Token) (interface{}, error) {
@@ -78,19 +78,47 @@ func (middleware *AuthMiddleware) ServeHTTP(next httprouter.Handle) httprouter.H
 			return secretKeyByte, nil
 		})
 
-		if err != nil || !token.Valid {
-			writer.Header().Set("Content-Type", "application/json")
-			writer.WriteHeader(http.StatusUnauthorized)
+		if err != nil {
+			if err == jwt.ErrTokenMalformed {
+				writer.Header().Set("Content-Type", "application/json")
+				writer.WriteHeader(http.StatusUnauthorized)
 
-			webResponse := web.WebResponse{
-				Code:   http.StatusUnauthorized,
-				Status: "Unauthorized",
-				Data:   "Invalid token",
+				webResponse := web.WebResponse{
+					Code:   http.StatusUnauthorized,
+					Status: "Unauthorized",
+					Data:   "Token is malformed",
+				}
+
+				middleware.Log.Warn().Msg("Unauthorized, invalid token")
+				helper.WriteToResponseBody(writer, webResponse)
+				return
+			} else if err.Error() == "token has invalid claims: token is expired" {
+				writer.Header().Set("Content-Type", "application/json")
+				writer.WriteHeader(http.StatusUnauthorized)
+
+				webResponse := web.WebResponse{
+					Code:   http.StatusUnauthorized,
+					Status: "Unauthorized",
+					Data:   "Token is expired",
+				}
+
+				middleware.Log.Warn().Msg("Unauthorized, invalid token")
+				helper.WriteToResponseBody(writer, webResponse)
+				return
+			} else {
+				writer.Header().Set("Content-Type", "application/json")
+				writer.WriteHeader(http.StatusUnauthorized)
+
+				webResponse := web.WebResponse{
+					Code:   http.StatusUnauthorized,
+					Status: "Unauthorized",
+					Data:   "Invalid token",
+				}
+
+				middleware.Log.Warn().Msg("Unauthorized, invalid token")
+				helper.WriteToResponseBody(writer, webResponse)
+				return
 			}
-
-			middleware.Log.Warn().Msg("Unauthorized, invalid token")
-			helper.WriteToResponseBody(writer, webResponse)
-			return
 		}
 
 		var id string

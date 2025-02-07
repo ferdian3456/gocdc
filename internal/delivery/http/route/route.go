@@ -14,6 +14,7 @@ type RouteConfig struct {
 }
 
 func (c *RouteConfig) SetupRoute() {
+	c.Router.POST("/refresh", c.UserController.TokenRenewal)
 	c.Router.GET("/user", c.AuthMiddleware.ServeHTTP(c.UserController.FindUserInfo))
 	c.Router.POST("/register", c.UserController.Register)
 	c.Router.POST("/login", c.UserController.Login)

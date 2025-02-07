@@ -31,9 +31,46 @@ func (repository *UserRepository) RegisterWithTx(ctx context.Context, tx *sql.Tx
 	}
 }
 
-func (repository *UserRepository) Login(ctx context.Context, email string) (domain.User, error) {
-	query := "SELECT email,password FROM users WHERE email=$1"
-	row, err := repository.DB.QueryContext(ctx, query, email)
+func (repository *UserRepository) AddRefreshTokenWithTx(ctx context.Context, tx *sql.Tx, refreshtoken domain.RefreshToken) {
+	query := "INSERT INTO refresh_tokens (user_id,hashed_refresh_token,created_at,expired_at) VALUES ($1,$2,$3,$4)"
+	_, err := tx.ExecContext(ctx, query, refreshtoken.User_id, refreshtoken.Hashed_refresh_token, refreshtoken.Created_at, refreshtoken.Expired_at)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+}
+
+func (repository *UserRepository) UpdateRefreshToken(ctx context.Context, tx *sql.Tx, tokenStatus string, userUUID string) {
+	query := "UPDATE refresh_tokens SET status = $1 WHERE user_id = $2 AND created_at = (SELECT MAX(created_at) FROM refresh_tokens WHERE user_id = $2)"
+	_, err := tx.ExecContext(ctx, query, tokenStatus, userUUID)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+}
+
+func (repository *UserRepository) FindLatestRefreshToken(ctx context.Context, tx *sql.Tx) (string, error) {
+	query := "SELECT hashed_refresh_token FROM refresh_tokens ORDER BY created_at DESC LIMIT 1"
+	row, err := tx.QueryContext(ctx, query)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer row.Close()
+
+	var hashed_refresh_token string
+	if row.Next() {
+		err = row.Scan(&hashed_refresh_token)
+		return hashed_refresh_token, nil
+	} else {
+		return "", errors.New("refresh token not found")
+	}
+}
+
+func (repository *UserRepository) LoginWithTx(ctx context.Context, tx *sql.Tx, email string) (domain.User, error) {
+	query := "SELECT id,email,password FROM users WHERE email=$1"
+	row, err := tx.QueryContext(ctx, query, email)
 	if err != nil {
 		respErr := errors.New("failed to query into database")
 		repository.Log.Panic().Err(err).Msg(respErr.Error())
@@ -43,14 +80,14 @@ func (repository *UserRepository) Login(ctx context.Context, email string) (doma
 
 	user := domain.User{}
 	if row.Next() {
-		err = row.Scan(&user.Email, &user.Password)
+		err = row.Scan(&user.Id, &user.Email, &user.Password)
 		if err != nil {
 			respErr := errors.New("failed to scan query result")
 			repository.Log.Panic().Err(err).Msg(respErr.Error())
 		}
 		return user, nil
 	} else {
-		return user, errors.New("user not found")
+		return user, errors.New("wrong email or password")
 	}
 }
 
@@ -193,7 +230,7 @@ func (repository *UserRepository) CheckUserExistenceWithTx(ctx context.Context, 
 }
 
 func (repository *UserRepository) CheckCredentialUniqueWithTx(ctx context.Context, tx *sql.Tx, user domain.User) error {
-	query := "SELECT name,email FROM users WHERE name=$1 AND email=$2"
+	query := "SELECT name,email FROM users WHERE name=$1 OR email=$2"
 	row, err := tx.QueryContext(ctx, query, user.Name, user.Email)
 	if err != nil {
 		respErr := errors.New("failed to query into database")

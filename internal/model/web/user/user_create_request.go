@@ -7,3 +7,7 @@ type UserRegisterRequest struct {
 	Address     string `validate:"required,min=10,max=30" json:"address"`
 	PhoneNumber string `validate:"required,min=12,max=12" json:"phone_number"`
 }
+
+type RenewalTokenRequest struct {
+	Refresh_token string `validate:"required,min=43" json:"refresh_token"`
+}

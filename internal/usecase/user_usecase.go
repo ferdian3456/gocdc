@@ -2,8 +2,11 @@ package usecase
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"github.com/go-playground/validator"
 	"github.com/golang-jwt/jwt/v5"
 	googleuuid "github.com/google/uuid"
@@ -11,9 +14,11 @@ import (
 	"github.com/rs/zerolog"
 	"gocdc/internal/helper"
 	"gocdc/internal/model/domain"
+	"gocdc/internal/model/web"
 	"gocdc/internal/model/web/user"
 	"gocdc/internal/repository"
 	"golang.org/x/crypto/bcrypt"
+	"net/http"
 	"time"
 )
 
@@ -35,12 +40,12 @@ func NewUserUsecase(userRepository *repository.UserRepository, db *sql.DB, valid
 	}
 }
 
-func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegisterRequest) (string, error) {
+func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegisterRequest) (web.TokenResponse, error) {
 	err := usecase.Validator.Struct(request)
 	if err != nil {
 		respErr := errors.New("invalid request body")
 		usecase.Log.Warn().Err(respErr).Msg(err.Error())
-		return "", respErr
+		return web.TokenResponse{}, respErr
 	}
 
 	// start transaction to ensure that credential is unique before create/insert data
@@ -75,64 +80,145 @@ func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegis
 	err = usecase.UserRepository.CheckCredentialUniqueWithTx(ctx, tx, user)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
-		return "", err
+		return web.TokenResponse{}, err
 	}
 
 	usecase.UserRepository.RegisterWithTx(ctx, tx, user)
 
-	secretKey := usecase.Config.String("SECRET_KEY")
-	secretKeyByte := []byte(secretKey)
+	secretKeyAccess := usecase.Config.String("SECRET_KEY_ACCESS_TOKEN")
+	secretKeyAccessByte := []byte(secretKeyAccess)
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":      user.Id,
-		"expired": time.Date(2030, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.Id,
+		"exp": now.Add(5 * time.Minute).Unix(),
 	})
 
-	tokenString, err := token.SignedString(secretKeyByte)
+	accessTokenString, err := accessToken.SignedString(secretKeyAccessByte)
 	if err != nil {
 		respErr := errors.New("failed to sign a token")
 		usecase.Log.Panic().Err(err).Msg(respErr.Error())
 	}
 
-	return tokenString, nil
+	secretKeyRefresh := usecase.Config.String("SECRET_KEY_REFRESH_TOKEN")
+	secretKeyRefreshByte := []byte(secretKeyRefresh)
+
+	addedTime := now.Add(30 * 24 * time.Hour)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.Id,
+		"exp": addedTime.Unix(),
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(secretKeyRefreshByte)
+	if err != nil {
+		respErr := errors.New("failed to sign a token")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	refreshTokenHash := sha256.New()
+	refreshTokenHash.Write([]byte(refreshTokenString))
+	hashedRefreshToken := refreshTokenHash.Sum(nil)
+
+	hashedRefreshTokenHex := hex.EncodeToString(hashedRefreshToken)
+
+	refreshTokenToDB := domain.RefreshToken{
+		User_id:              uuid.String(),
+		Hashed_refresh_token: hashedRefreshTokenHex,
+		Created_at:           &now,
+		Expired_at:           &addedTime,
+	}
+
+	usecase.UserRepository.AddRefreshTokenWithTx(ctx, tx, refreshTokenToDB)
+
+	tokenResponse := web.TokenResponse{
+		Access_Token:  accessTokenString,
+		Refresh_Token: refreshTokenString,
+	}
+
+	return tokenResponse, nil
 }
 
-func (usecase *UserUsecase) Login(ctx context.Context, request user.UserLoginRequest) (string, error) {
+func (usecase *UserUsecase) Login(ctx context.Context, request user.UserLoginRequest) (web.TokenResponse, error) {
 	err := usecase.Validator.Struct(request)
 	if err != nil {
 		respErr := errors.New("invalid request body")
 		usecase.Log.Warn().Err(respErr).Msg(err.Error())
-		return "", respErr
+		return web.TokenResponse{}, respErr
 	}
 
-	user, err := usecase.UserRepository.Login(ctx, request.Email)
+	tx, err := usecase.DB.Begin()
+	if err != nil {
+		respErr := errors.New("failed to start transaction")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer helper.CommitOrRollback(tx)
+
+	user, err := usecase.UserRepository.LoginWithTx(ctx, tx, request.Email)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
-		return "", err
+		return web.TokenResponse{}, err
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
 	if err != nil {
 		respErr := errors.New("wrong password")
 		usecase.Log.Warn().Err(respErr).Msg(err.Error())
-		return "", respErr
+		return web.TokenResponse{}, respErr
 	}
 
-	secretKey := usecase.Config.String("SECRET_KEY")
-	secretKeyByte := []byte(secretKey)
+	secretKeyAccess := usecase.Config.String("SECRET_KEY_ACCESS_TOKEN")
+	secretKeyAccessByte := []byte(secretKeyAccess)
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"id":      user.Id,
-		"expired": time.Date(2030, 10, 10, 12, 0, 0, 0, time.UTC).Unix(),
+	now := time.Now()
+
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.Id,
+		"exp": now.Add(5 * time.Minute).Unix(),
 	})
 
-	tokenString, err := token.SignedString(secretKeyByte)
+	accessTokenString, err := accessToken.SignedString(secretKeyAccessByte)
 	if err != nil {
 		respErr := errors.New("failed to sign a token")
 		usecase.Log.Panic().Err(err).Msg(respErr.Error())
 	}
 
-	return tokenString, nil
+	secretKeyRefresh := usecase.Config.String("SECRET_KEY_REFRESH_TOKEN")
+	secretKeyRefreshByte := []byte(secretKeyRefresh)
+
+	addedTime := now.Add(30 * 24 * time.Hour)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  user.Id,
+		"exp": addedTime.Unix(),
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(secretKeyRefreshByte)
+	if err != nil {
+		respErr := errors.New("failed to sign a token")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	refreshTokenHash := sha256.New()
+	refreshTokenHash.Write([]byte(refreshTokenString))
+	hashedRefreshToken := refreshTokenHash.Sum(nil)
+
+	hashedRefreshTokenHex := hex.EncodeToString(hashedRefreshToken)
+
+	refreshTokenToDB := domain.RefreshToken{
+		User_id:              user.Id,
+		Hashed_refresh_token: hashedRefreshTokenHex,
+		Created_at:           &now,
+		Expired_at:           &addedTime,
+	}
+
+	usecase.UserRepository.UpdateRefreshToken(ctx, tx, "Revoke", user.Id)
+	usecase.UserRepository.AddRefreshTokenWithTx(ctx, tx, refreshTokenToDB)
+
+	tokenResponse := web.TokenResponse{
+		Access_Token:  accessTokenString,
+		Refresh_Token: refreshTokenString,
+	}
+
+	return tokenResponse, nil
 }
 
 func (usecase *UserUsecase) Update(ctx context.Context, request user.UserUpdateRequest, userUUID string) error {
@@ -170,6 +256,139 @@ func (usecase *UserUsecase) Delete(ctx context.Context, userUUID string) error {
 	usecase.UserRepository.Delete(ctx, userUUID)
 
 	return nil
+}
+
+func (usecase *UserUsecase) TokenRenewal(ctx context.Context, request user.RenewalTokenRequest) (web.TokenResponse, error) {
+	err := usecase.Validator.Struct(request)
+	if err != nil {
+		respErr := errors.New("invalid request body")
+		usecase.Log.Warn().Err(respErr).Msg(err.Error())
+		return web.TokenResponse{}, respErr
+	}
+
+	tx, err := usecase.DB.Begin()
+	if err != nil {
+		respErr := errors.New("failed to start transaction")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer helper.CommitOrRollback(tx)
+
+	secretKeyRefresh := usecase.Config.String("SECRET_KEY_REFRESH_TOKEN")
+	secretKeyRefreshByte := []byte(secretKeyRefresh)
+
+	token, err := jwt.Parse(request.Refresh_token, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, http.ErrNotSupported
+		}
+		return secretKeyRefreshByte, nil
+	})
+
+	if err != nil {
+		if err == jwt.ErrTokenMalformed {
+			respErr := errors.New("Token is malformed")
+			usecase.Log.Warn().Err(respErr).Msg(err.Error())
+			return web.TokenResponse{}, respErr
+		} else if err.Error() == "token has invalid claims: token is expired" {
+
+		} else {
+			respErr := errors.New("Invalid token")
+			usecase.Log.Warn().Err(respErr).Msg(err.Error())
+			return web.TokenResponse{}, respErr
+		}
+	}
+
+	var id string
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if val, exists := claims["id"]; exists {
+			if strVal, ok := val.(string); ok {
+				id = strVal
+			}
+		} else {
+			respErr := errors.New("Invalid token")
+			usecase.Log.Warn().Err(respErr).Msg(err.Error())
+			return web.TokenResponse{}, respErr
+		}
+	}
+
+	err = usecase.UserRepository.CheckUserExistenceWithTx(ctx, tx, id)
+	if err != nil {
+		respErr := errors.New("User not found")
+		usecase.Log.Warn().Err(respErr).Msg(err.Error())
+		return web.TokenResponse{}, respErr
+	}
+
+	requestRefreshTokenHash := sha256.New()
+	requestRefreshTokenHash.Write([]byte(request.Refresh_token))
+	hashedRequestRefreshToken := requestRefreshTokenHash.Sum(nil)
+
+	hashedRequestRefreshTokenHex := hex.EncodeToString(hashedRequestRefreshToken)
+
+	hashedDBRefreshTokenHex, err := usecase.UserRepository.FindLatestRefreshToken(ctx, tx)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return web.TokenResponse{}, err
+	}
+
+	if hashedRequestRefreshTokenHex != hashedDBRefreshTokenHex {
+		fmt.Println("hashed from request: ", hashedRequestRefreshTokenHex)
+		fmt.Println("hashed from db :", hashedDBRefreshTokenHex)
+		usecase.UserRepository.UpdateRefreshToken(ctx, tx, "Revoke", id)
+		respErr := errors.New("Refresh token reuse detected. For security reasons, you have been logged out. Please sign in again.")
+		usecase.Log.Warn().Msg(respErr.Error())
+		return web.TokenResponse{}, respErr
+	}
+
+	secretKeyAccess := usecase.Config.String("SECRET_KEY_ACCESS_TOKEN")
+	secretKeyAccessByte := []byte(secretKeyAccess)
+
+	now := time.Now()
+
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  id,
+		"exp": now.Add(5 * time.Minute).Unix(),
+	})
+
+	accessTokenString, err := accessToken.SignedString(secretKeyAccessByte)
+	if err != nil {
+		respErr := errors.New("failed to sign a token")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	addedTime := now.Add(30 * 24 * time.Hour)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  id,
+		"exp": addedTime.Unix(),
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(secretKeyRefreshByte)
+	if err != nil {
+		respErr := errors.New("failed to sign a token")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	refreshTokenHash := sha256.New()
+	refreshTokenHash.Write([]byte(refreshTokenString))
+	hashedRefreshToken := refreshTokenHash.Sum(nil)
+
+	hashedRefreshTokenHex := hex.EncodeToString(hashedRefreshToken)
+
+	refreshTokenToDB := domain.RefreshToken{
+		User_id:              id,
+		Hashed_refresh_token: hashedRefreshTokenHex,
+		Created_at:           &now,
+		Expired_at:           &addedTime,
+	}
+
+	usecase.UserRepository.UpdateRefreshToken(ctx, tx, "Revoke", id)
+	usecase.UserRepository.AddRefreshTokenWithTx(ctx, tx, refreshTokenToDB)
+
+	tokenResponse := web.TokenResponse{
+		Access_Token:  accessTokenString,
+		Refresh_Token: refreshTokenString,
+	}
+
+	return tokenResponse, nil
 }
 
 func (usecase *UserUsecase) FindUserInfo(ctx context.Context, userUUID string) (user.UserResponse, error) {
