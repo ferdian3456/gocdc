@@ -5,8 +5,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/IBM/sarama"
 	"github.com/go-playground/validator"
 	"github.com/golang-jwt/jwt/v5"
 	googleuuid "github.com/google/uuid"
@@ -24,15 +26,17 @@ import (
 
 type UserUsecase struct {
 	UserRepository *repository.UserRepository
+	KafkaWriter    sarama.SyncProducer
 	DB             *sql.DB
 	Validator      *validator.Validate
 	Log            *zerolog.Logger
 	Config         *koanf.Koanf
 }
 
-func NewUserUsecase(userRepository *repository.UserRepository, db *sql.DB, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *UserUsecase {
+func NewUserUsecase(userRepository *repository.UserRepository, kafkaWriter sarama.SyncProducer, db *sql.DB, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *UserUsecase {
 	return &UserUsecase{
 		UserRepository: userRepository,
+		KafkaWriter:    kafkaWriter,
 		DB:             db,
 		Validator:      validator,
 		Log:            zerolog,
@@ -65,6 +69,8 @@ func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegis
 	}
 
 	uuid := googleuuid.New()
+
+	userEvent := user.UserEvents{}
 
 	user := domain.User{
 		Id:          uuid.String(),
@@ -132,6 +138,30 @@ func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegis
 	tokenResponse := web.TokenResponse{
 		Access_Token:  accessTokenString,
 		Refresh_Token: refreshTokenString,
+	}
+
+	userEvent.Id = uuid.String()
+	userEvent.Name = request.Name
+	userEvent.Email = request.Email
+	userEvent.Created_at = &now
+	userEvent.Updated_at = &now
+
+	messageJSON, err := json.Marshal(userEvent)
+	if err != nil {
+		respErr := errors.New("failed to marshal a json")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	topic := "create-account"
+
+	_, _, err = usecase.KafkaWriter.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(messageJSON),
+	})
+
+	if err != nil {
+		respErr := errors.New("failed to produce an event to kafka broker")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
 	}
 
 	return tokenResponse, nil

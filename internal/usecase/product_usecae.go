@@ -3,7 +3,9 @@ package usecase
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"github.com/IBM/sarama"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/go-playground/validator"
 	"github.com/knadh/koanf/v2"
@@ -18,6 +20,7 @@ import (
 type ProductUsecase struct {
 	UserRepository    *repository.UserRepository
 	ProductRepository *repository.ProductRepository
+	KafkaWriter       sarama.SyncProducer
 	DB                *sql.DB
 	ElasticSearch     *elasticsearch.Client
 	Validator         *validator.Validate
@@ -25,10 +28,11 @@ type ProductUsecase struct {
 	Koanf             *koanf.Koanf
 }
 
-func NewProductUsecase(userRepository *repository.UserRepository, productRepository *repository.ProductRepository, db *sql.DB, elasticsearch *elasticsearch.Client, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *ProductUsecase {
+func NewProductUsecase(userRepository *repository.UserRepository, kafkaWriter sarama.SyncProducer, productRepository *repository.ProductRepository, db *sql.DB, elasticsearch *elasticsearch.Client, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *ProductUsecase {
 	return &ProductUsecase{
 		UserRepository:    userRepository,
 		ProductRepository: productRepository,
+		KafkaWriter:       kafkaWriter,
 		DB:                db,
 		ElasticSearch:     elasticsearch,
 		Validator:         validator,
@@ -59,6 +63,8 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 		return err
 	}
 
+	productEvent := product.ProductEvent{}
+
 	now := time.Now()
 	product := domain.Product{
 		Seller_id:   userUUID,
@@ -71,6 +77,25 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 		Created_at:  &now,
 		Updated_at:  &now,
 	}
+
+	topic := "create-product"
+
+	productEvent.Seller_id = userUUID
+	productEvent.Name = request.Name
+	productEvent.Price = request.Price
+	productEvent.Created_at = &now
+	productEvent.Updated_at = &now
+
+	messageJSON, err := json.Marshal(productEvent)
+	if err != nil {
+		respErr := errors.New("failed to marshal a json")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	_, _, err = usecase.KafkaWriter.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(messageJSON),
+	})
 
 	usecase.ProductRepository.CreateWithTx(ctx, tx, product)
 

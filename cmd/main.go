@@ -31,6 +31,8 @@ func main() {
 	koanf := config.NewKoanf()
 	zerolog := config.NewZeroLog()
 	elasticsearch := config.NewElasticClient(koanf, &zerolog)
+	kafkaProducer := config.NewKafkaProducer(koanf, &zerolog)
+	kafkaConsumer := config.NewKafkaConsumer(koanf, &zerolog)
 	db := config.NewDB(koanf, &zerolog)
 	validator := config.NewValidator()
 
@@ -38,6 +40,8 @@ func main() {
 		Router:        router,
 		DB:            db,
 		ElasticSearch: elasticsearch,
+		KafkaProducer: kafkaProducer,
+		KafkaConsumer: kafkaConsumer,
 		Config:        koanf,
 		Validate:      validator,
 		Log:           &zerolog,
