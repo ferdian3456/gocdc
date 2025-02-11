@@ -23,8 +23,8 @@ func NewProductRepository(zerolog *zerolog.Logger, db *sql.DB) *ProductRepositor
 }
 
 func (repository *ProductRepository) CreateWithTx(ctx context.Context, tx *sql.Tx, product domain.Product) {
-	query := "INSERT INTO products (seller_id,name,quantity,price,weight,size,description,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)"
-	_, err := tx.ExecContext(ctx, query, product.Seller_id, product.Name, product.Quantity, product.Price, product.Weight, product.Size, product.Description, product.Created_at, product.Updated_at)
+	query := "INSERT INTO products (seller_id,name,product_picture,quantity,price,weight,size,description,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)"
+	_, err := tx.ExecContext(ctx, query, product.Seller_id, product.Name, product.Product_picture, product.Quantity, product.Price, product.Weight, product.Size, product.Description, product.Created_at, product.Updated_at)
 	if err != nil {
 		respErr := errors.New("failed to query into database")
 		repository.Log.Panic().Err(err).Msg(respErr.Error())

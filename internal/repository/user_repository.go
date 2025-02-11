@@ -23,8 +23,8 @@ func NewUserRepository(zerolog *zerolog.Logger, db *sql.DB) *UserRepository {
 }
 
 func (repository *UserRepository) RegisterWithTx(ctx context.Context, tx *sql.Tx, user domain.User) {
-	query := "INSERT INTO users (id,name,email,password,address,phonenumber,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)"
-	_, err := tx.ExecContext(ctx, query, user.Id, user.Name, user.Email, user.Password, user.Address, user.PhoneNumber, user.Created_at, user.Updated_at)
+	query := "INSERT INTO users (id,name,email,profile_picture,password,address,phonenumber,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)"
+	_, err := tx.ExecContext(ctx, query, user.Id, user.Name, user.Email, user.Profile_picture, user.Password, user.Address, user.PhoneNumber, user.Created_at, user.Updated_at)
 	if err != nil {
 		respErr := errors.New("failed to query into database")
 		repository.Log.Panic().Err(err).Msg(respErr.Error())
@@ -243,5 +243,29 @@ func (repository *UserRepository) CheckCredentialUniqueWithTx(ctx context.Contex
 		return errors.New("name or email are already exist")
 	} else {
 		return nil
+	}
+}
+
+func (repository *UserRepository) FindUserEmailByUUID(ctx context.Context, tx *sql.Tx, userUUID string) (*string, error) {
+	query := "SELECT email FROM users WHERE id=$1"
+	row, err := tx.QueryContext(ctx, query, userUUID)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer row.Close()
+
+	var email *string
+	if row.Next() {
+		err = row.Scan(&email)
+		if err != nil {
+			respErr := errors.New("failed to scan query result")
+			repository.Log.Panic().Err(err).Msg(respErr.Error())
+		}
+
+		return email, nil
+	} else {
+		return email, errors.New("email not found")
 	}
 }

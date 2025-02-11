@@ -3,9 +3,8 @@ package product
 import "time"
 
 type ProductEvent struct {
-	Name       string     `json:"name"`
-	Price      float64    `json:"price"`
-	Seller_id  string     `json:"seller_id"`
+	Id         string     `json:"id"`
+	Email      string     `json:"email"`
+	Event      string     `json:"event"`
 	Created_at *time.Time `json:"created_at"`
-	Updated_at *time.Time `json:"updated_at"`
 }

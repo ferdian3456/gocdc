@@ -70,17 +70,20 @@ func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegis
 
 	uuid := googleuuid.New()
 
-	userEvent := user.UserEvents{}
+	userAuditEvent := user.AuditEvent{}
+	userNotificationEvent := user.NotificationEvent{}
+	userVerificationEvent := user.VerificationEvent{}
 
 	user := domain.User{
-		Id:          uuid.String(),
-		Name:        request.Name,
-		Email:       request.Email,
-		Password:    string(hashedPassword),
-		Address:     request.Address,
-		PhoneNumber: request.PhoneNumber,
-		Created_at:  &now,
-		Updated_at:  &now,
+		Id:              uuid.String(),
+		Profile_picture: request.Profile_picture,
+		Name:            request.Name,
+		Email:           request.Email,
+		Password:        string(hashedPassword),
+		Address:         request.Address,
+		PhoneNumber:     request.PhoneNumber,
+		Created_at:      &now,
+		Updated_at:      &now,
 	}
 
 	err = usecase.UserRepository.CheckCredentialUniqueWithTx(ctx, tx, user)
@@ -140,23 +143,65 @@ func (usecase *UserUsecase) Register(ctx context.Context, request user.UserRegis
 		Refresh_Token: refreshTokenString,
 	}
 
-	userEvent.Id = uuid.String()
-	userEvent.Name = request.Name
-	userEvent.Email = request.Email
-	userEvent.Created_at = &now
-	userEvent.Updated_at = &now
+	topic := "user.activity"
 
-	messageJSON, err := json.Marshal(userEvent)
+	userAuditEvent.Id = uuid.String()
+	userAuditEvent.Event = "Create"
+	userAuditEvent.Created_at = &now
+
+	messageJSON, err := json.Marshal(userAuditEvent)
 	if err != nil {
 		respErr := errors.New("failed to marshal a json")
 		usecase.Log.Panic().Err(err).Msg(respErr.Error())
 	}
 
-	topic := "create-account"
-
 	_, _, err = usecase.KafkaWriter.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(messageJSON),
+	})
+
+	if err != nil {
+		respErr := errors.New("failed to produce an event to kafka broker")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	topic = "user.notification"
+
+	userNotificationEvent.Id = uuid.String()
+	userNotificationEvent.Email = request.Email
+	userNotificationEvent.Event = "Create"
+	userNotificationEvent.Created_at = &now
+
+	messageJSON1, err := json.Marshal(userNotificationEvent)
+	if err != nil {
+		respErr := errors.New("failed to marshal a json")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	_, _, err = usecase.KafkaWriter.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(messageJSON1),
+	})
+
+	if err != nil {
+		respErr := errors.New("failed to produce an event to kafka broker")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	topic = "user.verification"
+
+	userVerificationEvent.Id = uuid.String()
+	userVerificationEvent.Profile_picture = request.Profile_picture
+
+	messageJSON2, err := json.Marshal(userVerificationEvent)
+	if err != nil {
+		respErr := errors.New("failed to marshal a json")
+		usecase.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	_, _, err = usecase.KafkaWriter.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(messageJSON2),
 	})
 
 	if err != nil {

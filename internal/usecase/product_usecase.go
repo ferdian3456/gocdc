@@ -63,28 +63,36 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 		return err
 	}
 
+	userEmail, err := usecase.UserRepository.FindUserEmailByUUID(ctx, tx, userUUID)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return err
+	}
+
 	productEvent := product.ProductEvent{}
 
 	now := time.Now()
 	product := domain.Product{
-		Seller_id:   userUUID,
-		Name:        request.Name,
-		Quantity:    request.Quantity,
-		Price:       request.Price,
-		Weight:      request.Weight,
-		Size:        request.Size,
-		Description: request.Description,
-		Created_at:  &now,
-		Updated_at:  &now,
+		Seller_id:       userUUID,
+		Name:            request.Name,
+		Product_picture: request.Product_picture,
+		Quantity:        request.Quantity,
+		Price:           request.Price,
+		Weight:          request.Weight,
+		Size:            request.Size,
+		Description:     request.Description,
+		Created_at:      &now,
+		Updated_at:      &now,
 	}
 
-	topic := "create-product"
+	usecase.ProductRepository.CreateWithTx(ctx, tx, product)
 
-	productEvent.Seller_id = userUUID
-	productEvent.Name = request.Name
-	productEvent.Price = request.Price
+	topic := "product.activity"
+
+	productEvent.Id = userUUID
+	productEvent.Email = *userEmail
+	productEvent.Event = "Create"
 	productEvent.Created_at = &now
-	productEvent.Updated_at = &now
 
 	messageJSON, err := json.Marshal(productEvent)
 	if err != nil {
@@ -96,8 +104,6 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 		Topic: topic,
 		Value: sarama.ByteEncoder(messageJSON),
 	})
-
-	usecase.ProductRepository.CreateWithTx(ctx, tx, product)
 
 	return nil
 }

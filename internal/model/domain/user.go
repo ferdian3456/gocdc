@@ -3,14 +3,15 @@ package domain
 import "time"
 
 type User struct {
-	Id          string
-	Name        string
-	Email       string
-	Password    string
-	Address     string
-	PhoneNumber string
-	Created_at  *time.Time
-	Updated_at  *time.Time
+	Id              string
+	Name            string
+	Profile_picture string
+	Email           string
+	Password        string
+	Address         string
+	PhoneNumber     string
+	Created_at      *time.Time
+	Updated_at      *time.Time
 }
 
 type RefreshToken struct {

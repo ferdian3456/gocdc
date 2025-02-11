@@ -2,10 +2,20 @@ package user
 
 import "time"
 
-type UserEvents struct {
+type AuditEvent struct {
 	Id         string     `json:"id"`
-	Name       string     `json:"name"`
-	Email      string     `json:"email"`
+	Event      string     `json:"event"`
 	Created_at *time.Time `json:"created_at"`
-	Updated_at *time.Time `json:"updated_at"`
+}
+
+type NotificationEvent struct {
+	Id         string     `json:"id"`
+	Email      string     `json:"email"`
+	Event      string     `json:"event"`
+	Created_at *time.Time `json:"created_at"`
+}
+
+type VerificationEvent struct {
+	Id              string `json:"id"`
+	Profile_picture string `json:"profile_picture"`
 }

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS products(
     id serial PRIMARY KEY,
     seller_id char(36) NOT NULL,
     name varchar(30) NOT NULL,
+    product_picture varchar(255) NOT NULL,
     quantity int NOT NULL,
     price decimal(10,2) NOT NULL,
     weight int NOT NULL,
