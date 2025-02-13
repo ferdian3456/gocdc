@@ -1,0 +1,71 @@
+services:
+  db:
+    image: postgres:latest
+    container_name: postgresql_db2
+    ports:
+      - 5433:5432
+    environment:
+      - POSTGRES_USER=qasdwsxaf1
+      - POSTGRES_PASSWORD=qasdwsxaf1
+    #  - POSTGRES_DB=gocdc
+    # command: [ "postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10" ]
+    volumes:
+      - type: volume
+        source: db-volume
+        target: "/var/lib/pgsql/data"
+        read_only: false
+#    networks:
+#      - kafka-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+
+  #debezium:
+    #image: debezium/connect:3.0.0.Final
+    #container_name: debezium
+    #environment:
+    #  - BOOTSTRAP_SERVERS=kafka11:9092,kafka22:9093,kafka33:9094
+    #  - GROUP_ID=debezium-group
+    #  - CONFIG_STORAGE_TOPIC=dbz-configs
+    #  - OFFSET_STORAGE_TOPIC=dbz-offsets
+    #  - STATUS_STORAGE_TOPIC=dbz-status
+    #ports:
+    #  - "8083:8083"
+    #depends_on:
+    #  - kafka11
+    #  - kafka22
+    #  - kafka33
+    #networks:
+    #  - kafka-net
+
+volumes:
+  es_data:
+    driver: local
+  db-volume:
+    name: postgresql_volume2
+#  kafka_data11:
+#    driver: local
+#  kafka_data22:
+#    driver: local
+#  kafka_data33:
+#    driver: local
+
+#networks:
+#  kafka-net:
+#    driver: bridge

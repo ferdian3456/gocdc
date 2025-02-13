@@ -11,5 +11,4 @@ CREATE TABLE IF NOT EXISTS products(
     description text NOT NULL,
     created_at timestamp NOT NULL,
     updated_at timestamp NOT NULL,
-    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
 )

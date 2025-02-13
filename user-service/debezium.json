@@ -1,0 +1,19 @@
+{
+  "name": "gocdc-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "db",
+    "database.port": "5432",
+    "database.user": "qasdwsxaf",
+    "database.password": "qasdwsxaf",
+    "database.dbname": "gocdc",
+    "database.server.name": "postgres",
+    "table.include.list": "public.products",
+    "slot.name": "debezium_slot",
+    "publication.name": "debezium_publication",
+    "database.history.kafka.bootstrap.servers": "kafka11:9092,kafka22:9093,kafka33:9094",
+    "database.history.kafka.topic": "schema-changes.gocdc",
+    "topic.prefix": "dbz"
+  }
+}
