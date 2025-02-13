@@ -1,5 +1,8 @@
 # Ignore .idea / goland
 .idea/
 
-# Ignore .env
-user-service/.env
+## Ignore .env
+#user-service/.env
+#
+## Ignore .env
+#product-service/.env
