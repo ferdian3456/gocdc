@@ -19,5 +19,7 @@ func (c *RouteConfig) SetupRoute() {
 	c.Router.POST("/login", c.UserController.Login)
 	c.Router.PATCH("/user", c.AuthMiddleware.ServeHTTP(c.UserController.Update))
 	c.Router.DELETE("/user", c.AuthMiddleware.ServeHTTP(c.UserController.Delete))
-	c.Router.GET("/user/:userUUID", c.UserController.FindByUUId)
+	c.Router.GET("/user/existence", c.AuthMiddleware.ServeHTTP(c.UserController.CheckUserExistence))
+	c.Router.GET("/user/nameaddress", c.AuthMiddleware.ServeHTTP(c.UserController.FindUserNameAddress))
+	c.Router.GET("/user/email", c.AuthMiddleware.ServeHTTP(c.UserController.FindUserEmail))
 }

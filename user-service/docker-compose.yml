@@ -17,23 +17,23 @@ services:
     networks:
       - kafka-net
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      - xpack.security.enabled=true
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-      - "9300:9300"
+#  elasticsearch:
+#    image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
+#    container_name: elasticsearch
+#    environment:
+#      - discovery.type=single-node
+#      - bootstrap.memory_lock=true
+#      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+#      - xpack.security.enabled=true
+#    ulimits:
+#      memlock:
+#        soft: -1
+#        hard: -1
+#    volumes:
+#      - es_data:/usr/share/elasticsearch/data
+#    ports:
+#      - "9200:9200"
+#      - "9300:9300"
 
   zookeeper:
     container_name: zookeeper1
@@ -150,8 +150,8 @@ services:
     #  - kafka-net
 
 volumes:
-  es_data:
-    driver: local
+#  es_data:
+#    driver: local
   db-volume:
     name: postgresql_volume1
   kafka_data11:

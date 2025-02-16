@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/IBM/sarama"
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/go-playground/validator"
@@ -12,13 +13,16 @@ import (
 	"github.com/rs/zerolog"
 	"gocdc/internal/helper"
 	"gocdc/internal/model/domain"
+	"gocdc/internal/model/web"
 	"gocdc/internal/model/web/product"
 	"gocdc/internal/repository"
+	"io/ioutil"
+	"net/http"
 	"time"
 )
 
 type ProductUsecase struct {
-	UserRepository    *repository.UserRepository
+	UserServiceUrl    string
 	ProductRepository *repository.ProductRepository
 	KafkaWriter       sarama.SyncProducer
 	DB                *sql.DB
@@ -28,9 +32,9 @@ type ProductUsecase struct {
 	Koanf             *koanf.Koanf
 }
 
-func NewProductUsecase(userRepository *repository.UserRepository, kafkaWriter sarama.SyncProducer, productRepository *repository.ProductRepository, db *sql.DB, elasticsearch *elasticsearch.Client, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *ProductUsecase {
+func NewProductUsecase(userServiceUrl string, productRepository *repository.ProductRepository, kafkaWriter sarama.SyncProducer, db *sql.DB, elasticsearch *elasticsearch.Client, validator *validator.Validate, zerolog *zerolog.Logger, koanf *koanf.Koanf) *ProductUsecase {
 	return &ProductUsecase{
-		UserRepository:    userRepository,
+		UserServiceUrl:    userServiceUrl,
 		ProductRepository: productRepository,
 		KafkaWriter:       kafkaWriter,
 		DB:                db,
@@ -41,7 +45,7 @@ func NewProductUsecase(userRepository *repository.UserRepository, kafkaWriter sa
 	}
 }
 
-func (usecase *ProductUsecase) Create(ctx context.Context, request product.ProductCreateRequest, userUUID string) error {
+func (usecase *ProductUsecase) Create(ctx context.Context, request product.ProductCreateRequest, userUUID string, userAuthToken string) error {
 	err := usecase.Validator.Struct(request)
 	if err != nil {
 		respErr := errors.New("invalid request body")
@@ -57,13 +61,13 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 
 	defer helper.CommitOrRollback(tx)
 
-	err = usecase.UserRepository.CheckUserExistenceWithTx(ctx, tx, userUUID)
+	_, err = usecase.FindUserExistenceAPI(ctx, userAuthToken)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
 		return err
 	}
 
-	userEmail, err := usecase.UserRepository.FindUserEmailByUUID(ctx, tx, userUUID)
+	userEmail, err := usecase.FindUserEmailByUUIDAPI(ctx, userAuthToken)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
 		return err
@@ -90,7 +94,7 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 	topic := "product.activity"
 
 	productEvent.Id = userUUID
-	productEvent.Email = *userEmail
+	productEvent.Email = userEmail
 	productEvent.Event = "Create"
 	productEvent.Created_at = &now
 
@@ -106,6 +110,72 @@ func (usecase *ProductUsecase) Create(ctx context.Context, request product.Produ
 	})
 
 	return nil
+}
+
+func (usecase *ProductUsecase) FindUserExistenceAPI(ctx context.Context, userAuthToken string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%sexistence", usecase.UserServiceUrl), nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", userAuthToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var apiResp web.ExistenceApiResponse
+	err = json.Unmarshal(body, &apiResp)
+	if err != nil {
+		return "", err
+	}
+
+	return apiResp.Data.Status, nil
+}
+
+func (usecase *ProductUsecase) FindUserEmailByUUIDAPI(ctx context.Context, userAuthToken string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%semail", usecase.UserServiceUrl), nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", userAuthToken))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var apiResp web.EmailApiResponse
+	err = json.Unmarshal(body, &apiResp)
+	if err != nil {
+		return "", err
+	}
+
+	return apiResp.Data.Email, nil
 }
 
 func (usecase *ProductUsecase) Update(ctx context.Context, request product.ProductUpdateRequest, userUUID string, productID int) error {
@@ -198,7 +268,7 @@ func (usecase *ProductUsecase) FindProductHomePage(ctx context.Context) ([]produ
 	productHomePageResponses := []product.ProductHomePageResponse{}
 
 	for _, productArray := range productResponse {
-		userResponse, err := usecase.UserRepository.FindUserInfoWithTx(ctx, tx, productArray.Seller_id)
+		userResponse, err := usecase.UserRepository.FindUserInfoWith(ctx, tx, productArray.Seller_id)
 		if err != nil {
 			usecase.Log.Warn().Msg(err.Error())
 			return []product.ProductHomePageResponse{}, err
@@ -225,3 +295,5 @@ func (usecase *ProductUsecase) FindProductHomePage(ctx context.Context) ([]produ
 
 	return productHomePageResponses, nil
 }
+
+func (usecase *ProductUsecase) FindUserInfoAPI(ctx context.Context, )

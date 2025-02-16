@@ -168,6 +168,91 @@ func (controller UserController) FindUserInfo(writer http.ResponseWriter, reques
 	helper.WriteToResponseBody(writer, webResponse)
 }
 
+func (controller UserController) CheckUserExistence(writer http.ResponseWriter, request *http.Request, _ httprouter.Params) {
+	userUUID, _ := request.Context().Value("user_uuid").(string)
+
+	userStatusResponse, err := controller.UserUsecase.CheckUserExistence(request.Context(), userUUID)
+	if err != nil {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusNotFound)
+
+		webResponse := web.WebResponse{
+			Code:   http.StatusNotFound,
+			Status: "Not Found",
+			Data:   err.Error(),
+		}
+
+		helper.WriteToResponseBody(writer, webResponse)
+		return
+	}
+
+	webResponse := web.WebResponse{
+		Code:   200,
+		Status: "OK",
+		Data:   userStatusResponse,
+	}
+
+	helper.WriteToResponseBody(writer, webResponse)
+}
+
+func (controller UserController) FindUserNameAddress(writer http.ResponseWriter, request *http.Request, _ httprouter.Params) {
+	userUUID, _ := request.Context().Value("user_uuid").(string)
+
+	userResponse, err := controller.UserUsecase.FindUserNameAddress(request.Context(), userUUID)
+	if err != nil {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusNotFound)
+
+		webResponse := web.WebResponse{
+			Code:   http.StatusNotFound,
+			Status: "Not Found",
+			Data:   err.Error(),
+		}
+
+		helper.WriteToResponseBody(writer, webResponse)
+		return
+	}
+
+	webResponse := web.WebResponse{
+		Code:   200,
+		Status: "OK",
+		Data:   userResponse,
+	}
+
+	helper.WriteToResponseBody(writer, webResponse)
+}
+
+func (controller UserController) FindUserEmail(writer http.ResponseWriter, request *http.Request, _ httprouter.Params) {
+	userUUID, _ := request.Context().Value("user_uuid").(string)
+
+	userResponse, err := controller.UserUsecase.FindUserEmail(request.Context(), userUUID)
+	if err != nil {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusNotFound)
+
+		webResponse := web.WebResponse{
+			Code:   http.StatusNotFound,
+			Status: "Not Found",
+			Data:   err.Error(),
+		}
+
+		helper.WriteToResponseBody(writer, webResponse)
+		return
+	}
+
+	userEmailRespone := user.UserEmailResponse{
+		Email: userResponse,
+	}
+
+	webResponse := web.WebResponse{
+		Code:   200,
+		Status: "OK",
+		Data:   userEmailRespone,
+	}
+
+	helper.WriteToResponseBody(writer, webResponse)
+}
+
 func (controller UserController) TokenRenewal(writer http.ResponseWriter, request *http.Request, _ httprouter.Params) {
 	userRenewalTokenRequest := user.RenewalTokenRequest{}
 	helper.ReadFromRequestBody(request, &userRenewalTokenRequest)

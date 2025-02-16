@@ -143,7 +143,7 @@ func (middleware *AuthMiddleware) ServeHTTP(next httprouter.Handle) httprouter.H
 			}
 		}
 
-		err = middleware.UserUsecase.CheckUserExistance(request.Context(), id)
+		_, err = middleware.UserUsecase.CheckUserExistence(request.Context(), id)
 		if err != nil {
 			writer.Header().Set("Content-Type", "application/json")
 			writer.WriteHeader(http.StatusUnauthorized)

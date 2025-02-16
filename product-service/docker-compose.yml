@@ -16,7 +16,7 @@ services:
         read_only: false
 #    networks:
 #      - kafka-net
-
+#
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.16.1
     container_name: elasticsearch

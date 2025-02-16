@@ -35,16 +35,18 @@ func main() {
 	kafkaConsumer := config.NewKafkaConsumer(koanf, &zerolog)
 	db := config.NewDB(koanf, &zerolog)
 	validator := config.NewValidator()
+	userServiceUrl := koanf.String("USER_SERVICE_URL")
 
 	config.Server(&config.ServerConfig{
-		Router:        router,
-		DB:            db,
-		ElasticSearch: elasticsearch,
-		KafkaProducer: kafkaProducer,
-		KafkaConsumer: kafkaConsumer,
-		Config:        koanf,
-		Validate:      validator,
-		Log:           &zerolog,
+		UserServiceUrl: userServiceUrl,
+		Router:         router,
+		DB:             db,
+		ElasticSearch:  elasticsearch,
+		KafkaProducer:  kafkaProducer,
+		KafkaConsumer:  kafkaConsumer,
+		Config:         koanf,
+		Validate:       validator,
+		Log:            &zerolog,
 	})
 
 	router.PanicHandler = exception.ErrorHandler

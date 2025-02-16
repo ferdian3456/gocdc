@@ -322,7 +322,7 @@ func (usecase *UserUsecase) Update(ctx context.Context, request user.UserUpdateR
 }
 
 func (usecase *UserUsecase) Delete(ctx context.Context, userUUID string) error {
-	err := usecase.UserRepository.CheckUserExistence(ctx, userUUID)
+	_, err := usecase.UserRepository.CheckUserExistence(ctx, userUUID)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
 		return err
@@ -476,12 +476,36 @@ func (usecase *UserUsecase) FindUserInfo(ctx context.Context, userUUID string) (
 	return user, nil
 }
 
-func (usecase *UserUsecase) CheckUserExistance(ctx context.Context, userUUID string) error {
-	err := usecase.UserRepository.CheckUserExistence(ctx, userUUID)
+func (usecase *UserUsecase) FindUserNameAddress(ctx context.Context, userUUID string) (user.UserNameAddressResponse, error) {
+	user, err := usecase.UserRepository.FindUserNameAddress(ctx, userUUID)
 	if err != nil {
 		usecase.Log.Warn().Msg(err.Error())
-		return err
+		return user, err
 	}
 
-	return nil
+	return user, nil
+}
+
+func (usecase *UserUsecase) FindUserEmail(ctx context.Context, userUUID string) (string, error) {
+	user, err := usecase.UserRepository.FindUserEmail(ctx, userUUID)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return "", err
+	}
+
+	return *user, nil
+}
+
+func (usecase *UserUsecase) CheckUserExistence(ctx context.Context, userUUID string) (user.UserExistenceResponse, error) {
+	userExistence, err := usecase.UserRepository.CheckUserExistence(ctx, userUUID)
+	if err != nil {
+		usecase.Log.Warn().Msg(err.Error())
+		return user.UserExistenceResponse{}, err
+	}
+
+	userResponse := user.UserExistenceResponse{
+		Status: userExistence,
+	}
+
+	return userResponse, nil
 }

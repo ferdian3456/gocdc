@@ -16,30 +16,26 @@ import (
 )
 
 type ServerConfig struct {
-	Router        *httprouter.Router
-	DB            *sql.DB
-	ElasticSearch *elasticsearch.Client
-	KafkaProducer sarama.SyncProducer
-	KafkaConsumer sarama.Consumer
-	Log           *zerolog.Logger
-	Validate      *validator.Validate
-	Config        *koanf.Koanf
+	UserServiceUrl string
+	Router         *httprouter.Router
+	DB             *sql.DB
+	ElasticSearch  *elasticsearch.Client
+	KafkaProducer  sarama.SyncProducer
+	KafkaConsumer  sarama.Consumer
+	Log            *zerolog.Logger
+	Validate       *validator.Validate
+	Config         *koanf.Koanf
 }
 
 func Server(config *ServerConfig) {
-	userRepository := repository.NewUserRepository(config.Log, config.DB)
-	userUsecase := usecase.NewUserUsecase(userRepository, config.KafkaProducer, config.DB, config.Validate, config.Log, config.Config)
-	userController := http.NewUserController(userUsecase, config.Log)
-
 	productRepository := repository.NewProductRepository(config.Log, config.DB)
-	productUsecase := usecase.NewProductUsecase(userRepository, config.KafkaProducer, productRepository, config.DB, config.ElasticSearch, config.Validate, config.Log, config.Config)
+	productUsecase := usecase.NewProductUsecase(config.UserServiceUrl, productRepository, config.KafkaProducer, config.DB, config.ElasticSearch, config.Validate, config.Log, config.Config)
 	productController := http.NewProductController(productUsecase, config.Log)
 
-	authMiddleware := middleware.NewAuthMiddleware(config.Router, config.Log, config.Config, userUsecase)
+	authMiddleware := middleware.NewAuthMiddleware(config.Router, config.Log, config.Config, productUsecase)
 
 	routeConfig := route.RouteConfig{
 		Router:            config.Router,
-		UserController:    userController,
 		ProductController: productController,
 		AuthMiddleware:    authMiddleware,
 	}

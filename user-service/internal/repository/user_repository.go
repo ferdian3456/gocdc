@@ -195,7 +195,56 @@ func (repository *UserRepository) FindUserInfoWithTx(ctx context.Context, tx *sq
 	}
 }
 
-func (repository *UserRepository) CheckUserExistence(ctx context.Context, userUUID string) error {
+func (repository *UserRepository) FindUserNameAddress(ctx context.Context, userUUID string) (user.UserNameAddressResponse, error) {
+	query := "SELECT name,address FROM users WHERE id=$1"
+	row, err := repository.DB.QueryContext(ctx, query, userUUID)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer row.Close()
+
+	user := user.UserNameAddressResponse{}
+
+	if row.Next() {
+		err = row.Scan(&user.Name, &user.Address)
+		if err != nil {
+			respErr := errors.New("failed to scan query result")
+			repository.Log.Panic().Err(err).Msg(respErr.Error())
+		}
+
+		return user, nil
+	} else {
+		return user, errors.New("user not found")
+	}
+}
+
+func (repository *UserRepository) FindUserEmail(ctx context.Context, userUUID string) (*string, error) {
+	query := "SELECT email FROM users WHERE id=$1"
+	row, err := repository.DB.QueryContext(ctx, query, userUUID)
+	if err != nil {
+		respErr := errors.New("failed to query into database")
+		repository.Log.Panic().Err(err).Msg(respErr.Error())
+	}
+
+	defer row.Close()
+
+	var useremail *string
+	if row.Next() {
+		err = row.Scan(&useremail)
+		if err != nil {
+			respErr := errors.New("failed to scan query result")
+			repository.Log.Panic().Err(err).Msg(respErr.Error())
+		}
+
+		return useremail, nil
+	} else {
+		return useremail, errors.New("user not found")
+	}
+}
+
+func (repository *UserRepository) CheckUserExistence(ctx context.Context, userUUID string) (string, error) {
 	query := "SELECT name FROM users WHERE id=$1"
 	row, err := repository.DB.QueryContext(ctx, query, userUUID)
 	if err != nil {
@@ -206,9 +255,9 @@ func (repository *UserRepository) CheckUserExistence(ctx context.Context, userUU
 	defer row.Close()
 
 	if row.Next() {
-		return nil
+		return "User exist", nil
 	} else {
-		return errors.New("user not found")
+		return "User not found", errors.New("user not found")
 	}
 }
 

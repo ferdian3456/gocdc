@@ -26,11 +26,12 @@ func NewProductController(productUsecase *usecase.ProductUsecase, zerolog *zerol
 
 func (controller ProductController) Create(writer http.ResponseWriter, request *http.Request, _ httprouter.Params) {
 	userUUID, _ := request.Context().Value("user_uuid").(string)
+	userAuthToken, _ := request.Context().Value("user_auth_token").(string)
 
 	productCreateRequest := product.ProductCreateRequest{}
 	helper.ReadFromRequestBody(request, &productCreateRequest)
 
-	err := controller.ProductUsecase.Create(request.Context(), productCreateRequest, userUUID)
+	err := controller.ProductUsecase.Create(request.Context(), productCreateRequest, userUUID, userAuthToken)
 	if err != nil {
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusBadRequest)
